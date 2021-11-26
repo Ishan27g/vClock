@@ -1,6 +1,7 @@
 package vClock
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -142,7 +143,6 @@ func TestCompare(t *testing.T){
 
 func TestSortEvents(t *testing.T) {
 	t.Parallel()
-
 	p1 := Init("p1", []string{"p3","p4"})
 	p2 := Init("p2", []string{"p3","p4"})
 
@@ -158,4 +158,23 @@ func TestSortEvents(t *testing.T) {
 
 	assert.Equal(t, "event1",p2.GetEventsOrder()[0] )
 	assert.Equal(t, "event2",p2.GetEventsOrder()[1] )
+}
+
+func TestGlobalOrder(t *testing.T){
+
+	l := NewEventVectorClock()
+
+	f1:= Init("p1", []string{"p3","p4"})
+	f2:= Init("p2", []string{"p2","p4"})
+
+	e1 := f1.SendEvent("event1", []string{"p3", "p4"})
+
+	f2.ReceiveEvent("event1", e1)
+	e2 := f2.SendEvent("event2", []string{"p2", "p4"})
+
+	l.NewEvent("event2", e2)
+	l.NewEvent("event1", e1)
+
+	fmt.Println(l.GetEventsOrder())
+
 }

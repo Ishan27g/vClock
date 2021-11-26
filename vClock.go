@@ -30,18 +30,34 @@ type VectorClock interface {
 // VClock is a map of peer-address and its individual clock
 type VClock map[string]int
 
-// Every event is saved with the vector clock of when that event was received
 type event struct {
 	eventIdOrHash string
 	clock VClock
 }
-
 type vClock struct {
 	lock sync.Mutex
 	self string
 	vectorClock VClock
 	addressList *arraylist.List
 	events *arraylist.List
+}
+
+func (v *vClock) AddEvent(eventIdOrHash string, v1 VClock) {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+	// merge with received clock
+	for address, newClock := range v1 {
+		if v.addressList.Contains(address){
+			v.updateClock(address, newClock)
+		}else { // if new address
+			v.initClock(address)
+			v.updateClock(address, newClock)
+		}
+	}
+	v.events.Add(event{
+		eventIdOrHash: eventIdOrHash,
+		clock:         v1,
+	})
 }
 
 func (v *vClock) Clear() {
