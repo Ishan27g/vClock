@@ -72,6 +72,7 @@ func (v *vClock) SendEvent(eventIdOrHash string, address []string) EventClock {
 	defer v.lock.Unlock()
 	// update the individual clock entry for self
 	v.event(v.self)
+
 	for _, a := range address {
 		v.event(a)
 	}
@@ -105,16 +106,12 @@ func (v *vClock) updateClock(address string, newClock int) {
 	}
 }
 
-func Init(self string, peers []string) VectorClock {
+func Init(self string) VectorClock {
 	v := vClock{
 		lock:        sync.Mutex{},
 		vectorClock: make(map[string]int),
 		self: self,
 		addressList: arraylist.New(),
-	}
-
-	for _, peer := range peers {
-		v.initClock(peer)
 	}
 	v.initClock(v.self)
 	v.addressList.Sort(utils.StringComparator)

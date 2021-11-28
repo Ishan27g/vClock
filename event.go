@@ -1,6 +1,7 @@
 package vClock
 
 import (
+
 	"github.com/emirpasic/gods/lists/arraylist"
 	avl "github.com/emirpasic/gods/trees/avltree"
 )
@@ -8,24 +9,50 @@ import (
 // Events : provides interface for a process with lease/leader-role
 // receives `new-events` from followers with eventId and followers vector clock
 type Events interface {
-	// MergeEventClock takes an eventId & clock and merges with existing clock
-	MergeEventClock(eventIdOrHash string, v2 EventClock)
+	// MergeEvents merges the current event clocks with received event clocks.
+	// New events are added to current list
+	MergeEvents(events map[string]EventClock)
+	// MergeEvent takes an eventId & clock and merges with existing clock
+	// New events are added to current list
+	MergeEvent(eventIdOrHash string, v2 EventClock)
+	// GetCurrentEvents returns the events currently saved. Not in order
+	GetCurrentEvents() map[string]EventClock
 	// GetEventsOrder returns the eventIds ordered according to vector clock for the events
 	GetEventsOrder() (eventIdsOrHashes []string)
+
 }
 
 
 // EventClock is vector-clock of peer-address and its individual clock
 type EventClock map[string]int
 
+func (v *EventClock) mergeWith(v2 EventClock) *EventClock {
+	return MergeClocks(*v, v2)
+}
+
 // value for eventClocks tree
 type event struct {
-	eventId    string
-	eventClock EventClock
+	eventId    string `json:"event_id"`
+	eventClock EventClock `json:"event_clock"`
 }
 // all events
 type events struct {
 	eventClocks *avl.Tree // key = eventIdOrHash, value = EventClock
+}
+
+func (e *events) GetCurrentEvents() map[string]EventClock {
+	events := make(map[string]EventClock)
+	for it := e.eventClocks.Iterator(); it.Next();{
+		clock := it.Value().(event)
+		events[it.Key().(string)] = clock.eventClock
+	}
+	return events
+}
+
+func (e *events) MergeEvents(events map[string]EventClock) {
+	for eventId, clock := range events {
+		e.MergeEvent(eventId, clock)
+	}
 }
 
 // merge entries in v1 with those found in v2
@@ -43,8 +70,10 @@ func merge(v1, v2 EventClock) EventClock {
 	}
 	return v
 }
-func (v1 *EventClock)mergeWith(v2 EventClock)*EventClock {
-	 v := merge(*v1, v2)
+// MergeClocks merges the current event clock with the provided event clock.
+// unique entries from both clocks are kept
+func MergeClocks(v1 EventClock, v2 EventClock) *EventClock{
+	 v := merge(v1, v2)
 	 v = merge(v2, v)
 	 return &v
 }
@@ -56,7 +85,7 @@ func newEvent(eventIdOrHash string, v2 EventClock) event {
 	}
 }
 
-func (e *events) MergeEventClock(eventIdOrHash string, v2 EventClock) {
+func (e *events) MergeEvent(eventIdOrHash string, v2 EventClock) {
 	// check if present with another vectorClock
 	v1, found := e.eventClocks.Get(eventIdOrHash)
 	if !found {
@@ -102,7 +131,7 @@ var eventComparator = func(a, b interface{}) int {
 		return 1
 	}
 }
-func NewEventVector(self string, peers []string) Events {
+func NewEventVector() Events {
 	e := events{
 		eventClocks: avl.NewWithStringComparator(),
 	}
@@ -112,24 +141,18 @@ func NewEventVector(self string, peers []string) Events {
 
 // compareClock returns true if v1 is before or concurrent to v2
 func compareClock(v1, v2 EventClock) bool {
-	if len(v1) != len(v2) {
-		return false
-	}
 	v1IsBefore := true
+
+	v1 = *v1.mergeWith(v2)
+
 	for addr, v1Clock := range v1 {
 		v2Clock := v2[addr]
-		if v2Clock == 0 && v1Clock != 0{
-			continue
-		}
 		if v2Clock < v1Clock {
 			v1IsBefore = false
 		}
 	}
 	for addr, v2Clock := range v2 {
 		v1Clock := v1[addr]
-		if v1Clock == 0 && v2Clock != 0{
-			continue
-		}
 		if v2Clock < v1Clock {
 			v1IsBefore = false
 		}
