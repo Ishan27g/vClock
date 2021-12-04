@@ -37,14 +37,16 @@ Every Round (R) :
 */
 const tClientsPerZone = 5
 const tZones = 3
+
 // type testZone map[string]peer
 type mockNetwork struct {
 	mockZones []testZone
 }
-type testZone struct{
+type testZone struct {
 	zoneId int
-	peers map[string]VectorClock
+	peers  map[string]VectorClock
 }
+
 // mock peers for a zone
 func mockZonePeers(zone int) map[string]VectorClock {
 	peers := make(map[string]VectorClock)
@@ -54,14 +56,16 @@ func mockZonePeers(zone int) map[string]VectorClock {
 	}
 	return peers
 }
+
 // build mock address for a peer belonging to this zone
 func buildAddr(zone int, i int) string {
 	port := (zone * 10) + 9000 + i
 	addr := "http://service-zone-" + strconv.Itoa(zone) + ":" + strconv.Itoa(port)
 	return addr
 }
+
 // setup peers across zones
-func setupNetwork() []testZone{
+func setupNetwork() []testZone {
 	var t []testZone
 	for i := 1; i <= tZones; i++ {
 		t = append(t, testZone{
@@ -71,19 +75,21 @@ func setupNetwork() []testZone{
 	}
 	return t
 }
+
 // getZoneId for an address
-func (mn *mockNetwork)getZoneId(address string) int {
+func (mn *mockNetwork) getZoneId(address string) int {
 	for _, zone := range mn.mockZones {
-		for addr, _ := range zone.peers {
-			if addr == address{
+		for addr := range zone.peers {
+			if addr == address {
 				return zone.zoneId
 			}
 		}
 	}
 	return -1
 }
+
 //allPeerNames across all zones
-func (mn *mockNetwork)allPeerNames() []string{
+func (mn *mockNetwork) allPeerNames() []string {
 	var addresses []string
 	for _, zone := range mn.mockZones {
 		for addr, _ := range zone.peers {
@@ -92,8 +98,9 @@ func (mn *mockNetwork)allPeerNames() []string{
 	}
 	return addresses
 }
+
 // all peers and their clocks across all zones
-func (mn *mockNetwork)getPeersClocks(zone int) map[string]VectorClock{
+func (mn *mockNetwork) getPeersClocks(zone int) map[string]VectorClock {
 	peers := make(map[string]VectorClock)
 	for _, z := range mn.mockZones {
 		if zone == z.zoneId {
@@ -104,18 +111,18 @@ func (mn *mockNetwork)getPeersClocks(zone int) map[string]VectorClock{
 	}
 	return peers
 }
+
 // getPeerClock returns clock for this peer
-func (mn *mockNetwork)getPeerClock(address string) VectorClock{
+func (mn *mockNetwork) getPeerClock(address string) VectorClock {
 	for _, zone := range mn.mockZones {
 		for addr, clock := range zone.peers {
-			if addr == address{
+			if addr == address {
 				return clock
 			}
 		}
 	}
 	return nil
 }
-
 
 /// User sends gossip -> 1 peer in zone X receives it. Sends to leader of X and N peers in M zones, and
 /*
@@ -125,12 +132,12 @@ func (mn *mockNetwork)getPeerClock(address string) VectorClock{
 - Peer sends a `new-event` to zone-leader
 - Returns clock of the new event received by a zone leader for this event
 */
-func (mn *mockNetwork) mockUserEventAtZone(zone int, eventId string) EventClock{
+func (mn *mockNetwork) mockUserEventAtZone(zone int, eventId string) EventClock {
 	peerAddr := ""
 	zonePeers := mn.getPeersClocks(zone)
 	randomPeer := rand.Intn(len(zonePeers) - 1)
 	i := 0
-	for addr, _ := range zonePeers{
+	for addr := range zonePeers {
 		if i == randomPeer {
 			peerAddr = addr
 		}
@@ -141,9 +148,9 @@ func (mn *mockNetwork) mockUserEventAtZone(zone int, eventId string) EventClock{
 	i = 0
 	for {
 		randomPeer := rand.Intn(len(allPeers) - 1)
-		if strings.Compare(allPeers[randomPeer], peerAddr) != 0{
+		if strings.Compare(allPeers[randomPeer], peerAddr) != 0 {
 			randomGossipReceivers = append(randomGossipReceivers, allPeers[randomPeer])
-			i ++
+			i++
 		}
 		if i == 3 {
 			break
@@ -154,79 +161,37 @@ func (mn *mockNetwork) mockUserEventAtZone(zone int, eventId string) EventClock{
 }
 
 type leader struct {
-	addr string
+	addr   string
 	events Events
 }
 type evt struct {
 	eventId string
-	clock EventClock
+	clock   EventClock
 }
-func TestAllEventsAtAllLeaders(t *testing.T){
-	mn, zoneLeaders, leader1ReciveEvent, leader2ReciveEvent, leader3ReciveEvent, eventIds := setupRegistry()
 
-	// mock events in each zone. Each event is gossiped to every other zone
-	// mocked events are sent to leader1 after a random timeout
-	go func() {
-		d := rand.Intn(10000)
-		<-time.After(time.Duration(d))
-		mn.mockGossip(eventIds, leader1ReciveEvent)
-	}()
-	// mocked events are sent to leader2 after a random timeout
-	go func() {
-		d := rand.Intn(10000)
-		<-time.After(time.Duration(d))
-		mn.mockGossip(eventIds, leader2ReciveEvent)
-	}()
-	// mocked events are sent to leader3 after a random timeout
-	go func() {
-		d := rand.Intn(10000)
-		<-time.After(time.Duration(d))
-		mn.mockGossip(eventIds, leader3ReciveEvent)
-	}()
-
-	// receive the events at leader1
-	for i := range leader1ReciveEvent {
-		zoneLeaders[1].events.MergeEvent(i.eventId, i.clock)
-	}
-	// receive the events at leader2
-	for i := range leader2ReciveEvent {
-		zoneLeaders[2].events.MergeEvent(i.eventId, i.clock)
-	}
-	// receive the events at leader2
-	for i := range leader3ReciveEvent {
-		zoneLeaders[3].events.MergeEvent(i.eventId, i.clock)
-	}
-	// fmt.Println(fmt.Sprintf("Zone leaders - %v", zoneLeaders))
-	// fmt.Println(fmt.Sprintf("order - %s", zoneLeaders[1].events.GetEventsOrder()))
-
-	// order of all events for all 3 leaders match
-	assert.Equal(t, zoneLeaders[1].events.GetEventsOrder(), zoneLeaders[2].events.GetEventsOrder())
-	assert.Equal(t, zoneLeaders[2].events.GetEventsOrder(), zoneLeaders[3].events.GetEventsOrder())
-
-}
 func TestSomeEventsAtSomeLeaders(t *testing.T) {
-	t.Cleanup(func() {
+	/*t.Cleanup(func() {*/
 
-		mn, zoneLeaders, leader1ReciveEvent, leader2ReciveEvent, leader3ReciveEvent, eventIds := setupRegistry()
+	mn, zoneLeaders, leader1ReciveEvent, leader2ReciveEvent, leader3ReciveEvent, eventIds := setupRegistry()
 
 	// mock events in each zone. Some events are not gossiped to all zones.
 	// mocked events are sent to leader1 after a random timeout
 	go func() {
-		d := rand.Intn(1000)
+		d := rand.Intn(10000)
 		<-time.After(time.Duration(d))
-		mn.mockGossip(randomSlice(eventIds, 1), leader1ReciveEvent)
+		mn.mockGossip([]string{eventIds[0], eventIds[1]}, leader1ReciveEvent)
 	}()
 	// mocked events are sent to leader2 after a random timeout
 	go func() {
-		d := rand.Intn(1000)
+		d := rand.Intn(10000)
 		<-time.After(time.Duration(d))
-		mn.mockGossip(randomSlice(eventIds, 2), leader2ReciveEvent)
+		mn.mockGossip([]string{eventIds[2]}, leader2ReciveEvent)
 	}()
 	// mocked events are sent to leader3 after a random timeout
 	go func() {
-		d := rand.Intn(1000)
+		d := rand.Intn(10000)
 		<-time.After(time.Duration(d))
-		mn.mockGossip(randomSlice(eventIds, 2), leader3ReciveEvent)
+		mn.mockGossip([]string{eventIds[1], eventIds[0]}, leader3ReciveEvent)
 	}()
 
 	// receive the events at leader1
@@ -255,7 +220,7 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// leader 1 sends to all leaders, other leaders merge with this
-		d := rand.Intn(500)
+		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
 		leader2Events.MergeEvents(leader1expectedOrder)
 		leader3Events.MergeEvents(leader1expectedOrder)
@@ -264,16 +229,16 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 	// leader 1 receives from all leaders, merges with this
 	go func() {
 		defer wg.Done()
-		d := rand.Intn(500)
+		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
 		leader1Events.MergeEvents(leader2Events.GetCurrentEvents())
-		leader3Events.MergeEvents(leader3Events.GetCurrentEvents())
+		leader1Events.MergeEvents(leader3Events.GetCurrentEvents())
 	}()
 	wg.Add(1)
 	// leader 2 sends to all leaders, other leaders merge with this
 	go func() {
 		defer wg.Done()
-		d := rand.Intn(500)
+		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
 		leader1Events.MergeEvents(leader2expectedOrder)
 		leader3Events.MergeEvents(leader2expectedOrder)
@@ -282,7 +247,7 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 	// leader 2 receives from all leaders, merges with this
 	go func() {
 		defer wg.Done()
-		d := rand.Intn(500)
+		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
 		leader2Events.MergeEvents(leader1Events.GetCurrentEvents())
 		leader2Events.MergeEvents(leader3Events.GetCurrentEvents())
@@ -291,7 +256,7 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 	// leader 3 sends to all leaders, other leaders merge with this
 	go func() {
 		defer wg.Done()
-		d := rand.Intn(500)
+		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
 		leader1Events.MergeEvents(leader3expectedOrder)
 		leader2Events.MergeEvents(leader3expectedOrder)
@@ -300,7 +265,7 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 	// leader 3 receives from all leaders, merges with this
 	go func() {
 		defer wg.Done()
-		d := rand.Intn(500)
+		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
 		leader3Events.MergeEvents(leader2Events.GetCurrentEvents())
 		leader3Events.MergeEvents(leader3Events.GetCurrentEvents())
@@ -311,32 +276,31 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 	assert.Equal(t, leader1Events.GetEventsOrder(), leader2Events.GetEventsOrder())
 	assert.Equal(t, leader2Events.GetEventsOrder(), leader3Events.GetEventsOrder())
 
-		b, e := json.Marshal(leader1Events.GetCurrentEvents())
-		assert.NoError(t, e)
-		r := make(map[string]EventClock)
-		e = json.Unmarshal(b, &r)
-		assert.NoError(t, e)
+	b, e := json.Marshal(leader1Events.GetCurrentEvents())
+	assert.NoError(t, e)
+	r := make(map[string]EventClock)
+	e = json.Unmarshal(b, &r)
+	assert.NoError(t, e)
 
-		b, e = json.Marshal(leader2Events.GetCurrentEvents())
-		assert.NoError(t, e)
+	b, e = json.Marshal(leader2Events.GetCurrentEvents())
+	assert.NoError(t, e)
 
-		r = make(map[string]EventClock)
-		e = json.Unmarshal(b, &r)
-		assert.NoError(t, e)
+	r = make(map[string]EventClock)
+	e = json.Unmarshal(b, &r)
+	assert.NoError(t, e)
 
-		b, e = json.Marshal(leader3Events.GetCurrentEvents())
-		assert.NoError(t, e)
-		r = make(map[string]EventClock)
-		e = json.Unmarshal(b, &r)
-		assert.NoError(t, e)
+	b, e = json.Marshal(leader3Events.GetCurrentEvents())
+	assert.NoError(t, e)
+	r = make(map[string]EventClock)
+	e = json.Unmarshal(b, &r)
+	assert.NoError(t, e)
 
-	})
-
-
-
-
+	//	})
+	// fmt.Println(leader1Events.GetEventsOrder())
+	// fmt.Println(leader2Events.GetEventsOrder())
+	// fmt.Println(leader3Events.GetEventsOrder())
 }
-func setupRegistry() (mockNetwork, map[int]leader, chan evt, chan evt, chan evt, [] string) {
+func setupRegistry() (mockNetwork, map[int]leader, chan evt, chan evt, chan evt, []string) {
 	rand.Seed(time.Now().Unix())
 	mn := mockNetwork{
 		mockZones: setupNetwork(),
@@ -350,20 +314,18 @@ func setupRegistry() (mockNetwork, map[int]leader, chan evt, chan evt, chan evt,
 		}
 	}
 	// channel over which a zone leader receives `new-event` from its zone's followers
-	leader1ReciveEvent := make(chan evt)
-	leader2ReciveEvent := make(chan evt)
-	leader3ReciveEvent := make(chan evt)
+	leader1ReciveEvent := make(chan evt, 3)
+	leader2ReciveEvent := make(chan evt, 3)
+	leader3ReciveEvent := make(chan evt, 3)
 
 	// eventIds of events created by user
-	eventIds := []string{ "event-1-hash",  "event-2-hash",  "event-3-hash"}
+	eventIds := []string{"event-1-hash", "event-2-hash", "event-3-hash"}
 	return mn, zoneLeaders, leader1ReciveEvent, leader2ReciveEvent, leader3ReciveEvent, eventIds
 }
 
 // randomEvent creates a new event at this zone after a random timeout
-func (mn *mockNetwork)randomEvent(zoneId int, eventId string) evt{
-	rand.Seed(time.Now().Unix())
-	d := rand.Intn(5000)
-	<- time.After(time.Duration(d))
+func (mn *mockNetwork) randomEvent(zoneId int, eventId string) evt {
+	//rand.Seed(time.Now().Unix())
 	return evt{
 		eventId: eventId,
 		clock:   mn.mockUserEventAtZone(zoneId, eventId),
@@ -372,34 +334,38 @@ func (mn *mockNetwork)randomEvent(zoneId int, eventId string) evt{
 
 // mockGossip mocks a `new-event` at the corresponding zone after a random timeout
 // it returns the event to eventChan.
-func (mn *mockNetwork) mockGossip(eventIds []string,eventChan chan evt) (){
+func (mn *mockNetwork) mockGossip(eventIds []string, eventChan chan evt) {
 	wg := sync.WaitGroup{}
 	for i, id := range eventIds {
 		wg.Add(1)
-		go func() {
+		go func(i int, id string) {
 			defer wg.Done()
-			eventChan <- mn.randomEvent(i + 1, id)
-		}()
+			d := rand.Intn(1000)
+			<-time.After(time.Duration(d))
+			eventChan <- mn.randomEvent(i+1, id)
+		}(i, id)
 	}
 	wg.Wait()
 	close(eventChan)
 }
+
 var added bool
-func randomSlice(of []string, size int)[]string{
+
+func randomSlice(of []string, size int) []string {
 	var result []string
+	rand.Seed(time.Now().Unix())
 	for {
-		rand.Seed(time.Now().Unix() * 3)
 		r := rand.Intn(len(of))
 		added = false
 		for _, s := range result {
-			if s == of[r]{
+			if s == of[r] {
 				added = true
 			}
 		}
-		if !added{
+		if !added {
 			result = append(result, of[r])
 		}
-		if len(result) == size{
+		if len(result) == size {
 			break
 		}
 	}

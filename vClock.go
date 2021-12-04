@@ -7,6 +7,7 @@ import (
 	"github.com/emirpasic/gods/lists/arraylist"
 	"github.com/emirpasic/gods/utils"
 )
+
 // VectorClock provides interface to implement vector clock
 type VectorClock interface {
 	// Get returns the current vector clock
@@ -19,14 +20,19 @@ type VectorClock interface {
 	// ReceiveEvent updates the current vector clock using element wise maximum with the passed vector clock
 	ReceiveEvent(eventIdOrHash string, v EventClock)
 
-	Clear()
+	Reset()
 	print()
 }
 
-// EventClock is a map of peer-address and its individual clock
+// EventClock is vector-clock of peer-address and its individual clock
+type EventClock map[string]int
+
+func (v *EventClock) mergeWith(v2 EventClock) *EventClock {
+	return MergeClocks(*v, v2)
+}
 
 type vClock struct {
-	lock sync.Mutex
+	lock        sync.Mutex
 	self        string
 	vectorClock EventClock
 	addressList *arraylist.List
@@ -37,9 +43,9 @@ func (v *vClock) AddEvent(eventIdOrHash string, v1 EventClock) {
 	defer v.lock.Unlock()
 	// merge with received clock
 	for address, newClock := range v1 {
-		if v.addressList.Contains(address){
+		if v.addressList.Contains(address) {
 			v.updateClock(address, newClock)
-		}else { // if new address
+		} else { // if new address
 			v.initClock(address)
 			v.updateClock(address, newClock)
 		}
@@ -47,11 +53,11 @@ func (v *vClock) AddEvent(eventIdOrHash string, v1 EventClock) {
 
 }
 
-func (v *vClock) Clear() {
+func (v *vClock) Reset() {
 	v.lock.Lock()
-	v.vectorClock = nil
-	v.addressList.Clear()
-	v.addressList = nil
+	v.vectorClock = make(map[string]int)
+	v.addressList = arraylist.New()
+	v.initClock(v.self)
 	v.lock.Unlock()
 }
 
@@ -78,6 +84,7 @@ func (v *vClock) SendEvent(eventIdOrHash string, address []string) EventClock {
 	}
 	return v.Get()
 }
+
 // ReceiveEvent updates the current vector clock using element wise maximum with the passed vector clock
 func (v *vClock) ReceiveEvent(eventIdOrHash string, v1 EventClock) {
 	v.lock.Lock()
@@ -86,19 +93,21 @@ func (v *vClock) ReceiveEvent(eventIdOrHash string, v1 EventClock) {
 	v.event(v.self)
 	// merge with received clock
 	for address, newClock := range v1 {
-		if v.addressList.Contains(address){
+		if v.addressList.Contains(address) {
 			v.updateClock(address, newClock)
-		}else { // if new address
+		} else { // if new address
 			v.initClock(address)
 			v.updateClock(address, newClock)
 		}
 	}
 }
+
 // event updates the individual clock entry for this entry
 func (v *vClock) event(address string) {
 	currentClock := v.vectorClock[address]
 	v.vectorClock[address] = currentClock + 1
 }
+
 // updateClock updates the individual clock if it is lower than the new clock
 func (v *vClock) updateClock(address string, newClock int) {
 	if v.vectorClock[address] < newClock {
@@ -110,7 +119,7 @@ func Init(self string) VectorClock {
 	v := vClock{
 		lock:        sync.Mutex{},
 		vectorClock: make(map[string]int),
-		self: self,
+		self:        self,
 		addressList: arraylist.New(),
 	}
 	v.initClock(v.self)
@@ -118,7 +127,7 @@ func Init(self string) VectorClock {
 	return &v
 }
 
-func (v *vClock)initClock(peer string) {
+func (v *vClock) initClock(peer string) {
 	v.vectorClock[peer] = 0
 	v.addressList.Add(peer)
 }

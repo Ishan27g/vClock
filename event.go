@@ -1,7 +1,6 @@
 package vClock
 
 import (
-
 	"github.com/emirpasic/gods/lists/arraylist"
 	avl "github.com/emirpasic/gods/trees/avltree"
 )
@@ -19,22 +18,14 @@ type Events interface {
 	GetCurrentEvents() map[string]EventClock
 	// GetEventsOrder returns the eventIds ordered according to vector clock for the events
 	GetEventsOrder() (eventIdsOrHashes []string)
-
-}
-
-
-// EventClock is vector-clock of peer-address and its individual clock
-type EventClock map[string]int
-
-func (v *EventClock) mergeWith(v2 EventClock) *EventClock {
-	return MergeClocks(*v, v2)
 }
 
 // value for eventClocks tree
 type event struct {
-	eventId    string `json:"event_id"`
+	eventId    string     `json:"event_id"`
 	eventClock EventClock `json:"event_clock"`
 }
+
 // all events
 type events struct {
 	eventClocks *avl.Tree // key = eventIdOrHash, value = EventClock
@@ -42,7 +33,7 @@ type events struct {
 
 func (e *events) GetCurrentEvents() map[string]EventClock {
 	events := make(map[string]EventClock)
-	for it := e.eventClocks.Iterator(); it.Next();{
+	for it := e.eventClocks.Iterator(); it.Next(); {
 		clock := it.Value().(event)
 		events[it.Key().(string)] = clock.eventClock
 	}
@@ -62,20 +53,21 @@ func merge(v1, v2 EventClock) EventClock {
 		if v2[s] == 0 && i != 0 { // in v1 and not in v2
 			v[s] = i
 		}
-		if v2[s] < i  { // in v1 and not in v2
+		if v2[s] < i { // in v1 and not in v2
 			v[s] = i
-		}else {
+		} else {
 			v[s] = v2[s]
 		}
 	}
 	return v
 }
+
 // MergeClocks merges the current event clock with the provided event clock.
 // unique entries from both clocks are kept
-func MergeClocks(v1 EventClock, v2 EventClock) *EventClock{
-	 v := merge(v1, v2)
-	 v = merge(v2, v)
-	 return &v
+func MergeClocks(v1 EventClock, v2 EventClock) *EventClock {
+	v := merge(v1, v2)
+	v = merge(v2, v)
+	return &v
 }
 
 func newEvent(eventIdOrHash string, v2 EventClock) event {
@@ -131,13 +123,13 @@ var eventComparator = func(a, b interface{}) int {
 		return 1
 	}
 }
+
 func NewEventVector() Events {
 	e := events{
 		eventClocks: avl.NewWithStringComparator(),
 	}
 	return &e
 }
-
 
 // compareClock returns true if v1 is before or concurrent to v2
 func compareClock(v1, v2 EventClock) bool {

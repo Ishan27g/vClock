@@ -6,8 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
-func TestCompare(t *testing.T){
+func TestCompare(t *testing.T) {
 
 	m1 := make(EventClock)
 	m1["p1"] = 1
@@ -55,7 +54,7 @@ func TestSendEventEvent(t *testing.T) {
 	p1 := Init("p1")
 	p1.SendEvent("event", []string{"p2"})
 	assert.Equal(t, 1, p1.Get()["p2"])
-	p1.Clear()
+	p1.Reset()
 }
 func TestClocksMatch(t *testing.T) {
 
@@ -69,6 +68,6 @@ func TestClocksMatch(t *testing.T) {
 
 	// both clocks match
 	assert.Equal(t, p1.Get(), p2.Get())
-	p1.Clear()
-	p2.Clear()
+	p1.Reset()
+	p2.Reset()
 }
