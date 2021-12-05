@@ -53,8 +53,8 @@ func TestCompare(t *testing.T) {
 func TestSendEventEvent(t *testing.T) {
 	p1 := Init("p1")
 	p1.SendEvent("event", []string{"p2"})
-	assert.Equal(t, 1, p1.Get()["p2"])
-	p1.Reset()
+	assert.Equal(t, 1, p1.Get("event")["p2"])
+	p1.Clear("event")
 }
 func TestClocksMatch(t *testing.T) {
 
@@ -64,10 +64,10 @@ func TestClocksMatch(t *testing.T) {
 	// p1 sends vClock to p2
 	p1.SendEvent("event", []string{"p2"})
 	// p2 receives vClock from p1
-	p2.ReceiveEvent("event", p1.Get())
+	p2.ReceiveEvent("event", p1.Get("event"))
 
 	// both clocks match
-	assert.Equal(t, p1.Get(), p2.Get())
-	p1.Reset()
-	p2.Reset()
+	assert.Equal(t, p1.Get("event"), p2.Get("event"))
+	p1.Clear("event")
+	p2.Clear("event")
 }
