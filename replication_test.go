@@ -1,7 +1,6 @@
 package vClock
 
 import (
-	"encoding/json"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -196,15 +196,15 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 
 	// receive the events at leader1
 	for i := range leader1ReciveEvent {
-		zoneLeaders[1].events.MergeEvent(i.eventId, i.clock)
+		zoneLeaders[1].events.MergeEvent(cloudEvent(i.eventId, i.clock))
 	}
 	// receive the events at leader2
 	for i := range leader2ReciveEvent {
-		zoneLeaders[2].events.MergeEvent(i.eventId, i.clock)
+		zoneLeaders[2].events.MergeEvent(cloudEvent(i.eventId, i.clock))
 	}
 	// receive the events at leader2
 	for i := range leader3ReciveEvent {
-		zoneLeaders[3].events.MergeEvent(i.eventId, i.clock)
+		zoneLeaders[3].events.MergeEvent(cloudEvent(i.eventId, i.clock))
 	}
 
 	// leaders exchange their snapshots
@@ -276,24 +276,14 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 	assert.Equal(t, leader1Events.GetEventsOrder(), leader2Events.GetEventsOrder())
 	assert.Equal(t, leader2Events.GetEventsOrder(), leader3Events.GetEventsOrder())
 
-	b, e := json.Marshal(leader1Events.GetCurrentEvents())
-	assert.NoError(t, e)
-	r := make(map[string]EventClock)
-	e = json.Unmarshal(b, &r)
-	assert.NoError(t, e)
-
-	b, e = json.Marshal(leader2Events.GetCurrentEvents())
-	assert.NoError(t, e)
-
-	r = make(map[string]EventClock)
-	e = json.Unmarshal(b, &r)
-	assert.NoError(t, e)
-
-	b, e = json.Marshal(leader3Events.GetCurrentEvents())
-	assert.NoError(t, e)
-	r = make(map[string]EventClock)
-	e = json.Unmarshal(b, &r)
-	assert.NoError(t, e)
+	b := leader1Events.GetCurrentEvents()
+	for _, b2 := range b {
+		marshalJSON, err := b2.MarshalJSON()
+		assert.NoError(t, err)
+		var c = new(cloudevents.Event)
+		err = c.UnmarshalJSON(marshalJSON)
+		assert.NoError(t, err)
+	}
 
 	//	})
 	// fmt.Println(leader1Events.GetEventsOrder())

@@ -1,6 +1,9 @@
 package vClock
 
 import (
+	"encoding/json"
+
+	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/emirpasic/gods/lists/arraylist"
 	avl "github.com/emirpasic/gods/trees/avltree"
 )
@@ -10,20 +13,37 @@ import (
 type Events interface {
 	// MergeEvents merges the current event clocks with received event clocks.
 	// New events are added to current list
-	MergeEvents(events map[string]EventClock)
+	MergeEvents(cs []cloudevents.Event)
 	// MergeEvent takes an eventId & clock and merges with existing clock
 	// New events are added to current list
-	MergeEvent(eventIdOrHash string, v2 EventClock)
+	MergeEvent(c cloudevents.Event)
 	// GetCurrentEvents returns the events currently saved. Not in order
-	GetCurrentEvents() map[string]EventClock
+	GetCurrentEvents() []cloudevents.Event
 	// GetEventsOrder returns the eventIds ordered according to vector clock for the events
 	GetEventsOrder() (eventIdsOrHashes []string)
 }
 
+func convertToLocal(c cloudevents.Event) event {
+	var e event
+	_ = json.Unmarshal(c.DataEncoded, &e.EventClock)
+	e.EventId = c.ID()
+	return e
+}
+func convertToCloud(e event) cloudevents.Event {
+	c := cloudevents.NewEvent()
+	c.SetID(e.EventId)
+	c.SetSource("okok")
+	err := c.SetData(cloudevents.ApplicationJSON, e.EventClock)
+	if err != nil {
+		return cloudevents.Event{}
+	}
+	return c
+}
+
 // value for eventClocks tree
 type event struct {
-	eventId    string     `json:"event_id"`
-	eventClock EventClock `json:"event_clock"`
+	EventId    string     `json:"event_id"`
+	EventClock EventClock `json:"event_clock"`
 }
 
 // all events
@@ -31,18 +51,21 @@ type events struct {
 	eventClocks *avl.Tree // key = eventIdOrHash, value = EventClock
 }
 
-func (e *events) GetCurrentEvents() map[string]EventClock {
-	events := make(map[string]EventClock)
+func (e *events) GetCurrentEvents() []cloudevents.Event {
+	var events []cloudevents.Event
 	for it := e.eventClocks.Iterator(); it.Next(); {
 		clock := it.Value().(event)
-		events[it.Key().(string)] = clock.eventClock
+		events = append(events, convertToCloud(event{
+			EventId:    it.Key().(string),
+			EventClock: clock.EventClock,
+		}))
 	}
 	return events
 }
 
-func (e *events) MergeEvents(events map[string]EventClock) {
-	for eventId, clock := range events {
-		e.MergeEvent(eventId, clock)
+func (e *events) MergeEvents(cs []cloudevents.Event) {
+	for _, c := range cs {
+		e.MergeEvent(c)
 	}
 }
 
@@ -72,25 +95,26 @@ func MergeClocks(v1 EventClock, v2 EventClock) *EventClock {
 
 func newEvent(eventIdOrHash string, v2 EventClock) event {
 	return event{
-		eventId:    eventIdOrHash,
-		eventClock: v2,
+		EventId:    eventIdOrHash,
+		EventClock: v2,
 	}
 }
 
-func (e *events) MergeEvent(eventIdOrHash string, v2 EventClock) {
+func (e *events) MergeEvent(c cloudevents.Event) {
+	ev := convertToLocal(c)
 	// check if present with another vectorClock
-	v1, found := e.eventClocks.Get(eventIdOrHash)
+	v1, found := e.eventClocks.Get(ev.EventId)
 	if !found {
 		// new entry
-		e.eventClocks.Put(eventIdOrHash, newEvent(eventIdOrHash, v2))
+		e.eventClocks.Put(ev.EventId, newEvent(ev.EventId, ev.EventClock))
 		return
 	}
 	// get existing EventClock
 	v := v1.(event)
 	// merge v1 and v2
-	v.eventClock = *v.eventClock.mergeWith(v2)
+	v.EventClock = *v.EventClock.mergeWith(ev.EventClock)
 	// update eventClocks
-	e.eventClocks.Put(eventIdOrHash, v)
+	e.eventClocks.Put(ev.EventId, v)
 }
 
 func (e *events) GetEventsOrder() []string {
@@ -104,7 +128,7 @@ func (e *events) GetEventsOrder() []string {
 	var eventIdsOrHashes []string
 	a.Each(func(_ int, value interface{}) {
 		ec := value.(event)
-		eventIdsOrHashes = append(eventIdsOrHashes, ec.eventId)
+		eventIdsOrHashes = append(eventIdsOrHashes, ec.EventId)
 	})
 
 	return eventIdsOrHashes
@@ -113,8 +137,8 @@ func (e *events) GetEventsOrder() []string {
 var eventComparator = func(a, b interface{}) int {
 	v1 := a.(event)
 	v2 := b.(event)
-	c1 := compareClock(v1.eventClock, v2.eventClock)
-	c2 := compareClock(v2.eventClock, v1.eventClock)
+	c1 := compareClock(v1.EventClock, v2.EventClock)
+	c2 := compareClock(v2.EventClock, v1.EventClock)
 	if c1 && c2 { // both are same
 		return 0
 	} else if c1 && !c2 { // e1 happened before
