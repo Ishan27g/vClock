@@ -6,48 +6,53 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCompare(t *testing.T) {
+func mockClock(clock int, ids ...string) EventClock {
+	e := make(EventClock)
+	for _, id := range ids {
+		e[id] = clock
+	}
+	return e
+}
 
-	m1 := make(EventClock)
-	m1["p1"] = 1
-	m1["p2"] = 1
-	m1["p3"] = 1
+func TestCompareMisc(t *testing.T) {
 
-	m2 := make(EventClock)
-	m2["p1"] = 1
-	m2["p2"] = 1
-	m2["p3"] = 1
+	t.Run("all events are common in the clock", func(t *testing.T) {
+		m1 := mockClock(1, "event1", "event2", "event3")
+		m2 := mockClock(1, "event1", "event2", "event3")
+		m3 := mockClock(1, "event1", "event2", "event3")
+		m4 := mockClock(1, "event1", "event2", "event3")
 
-	m3 := make(EventClock)
-	m3["p1"] = 1
-	m3["p2"] = 2
-	m3["p3"] = 1
+		assert.True(t, compareClock(m1, m2))
+		assert.True(t, compareClock(m2, m3))
+		assert.True(t, compareClock(m3, m4))
+	})
+	t.Run("some events are common", func(t *testing.T) {
+		m1 := mockClock(1, "event1", "event2", "event3")
+		m2 := mockClock(1, "event1", "event2", "event3")
+		m3 := mockClock(1, "event1", "event2", "event3")
 
-	m4 := make(EventClock)
-	m4["p1"] = 2
-	m4["p2"] = 2
-	m4["p3"] = 3
+		delete(m1, "event2")
+		delete(m2, "event1")
+		delete(m3, "event3")
 
-	assert.True(t, compareClock(m1, m2))
-	assert.True(t, compareClock(m2, m3))
-	assert.False(t, compareClock(m3, m2))
-	assert.True(t, compareClock(m1, m4))
-	assert.True(t, compareClock(m2, m4))
-	assert.True(t, compareClock(m3, m4))
-	assert.False(t, compareClock(m4, m3))
+		assert.True(t, compareClock(m1, m2))
+		assert.True(t, compareClock(m2, m3))
+	})
 
-	m5 := make(EventClock)
-	m5["p1"] = 20
-	m5["p2"] = 20
-	m5["p3"] = 40
-	m5["p4"] = 20
+	t.Run("compares only common events", func(t *testing.T) {
+		m5 := make(EventClock)
+		m5["p1"] = 10
+		m5["p2"] = 10
+		m5["p3"] = 42
 
-	m6 := make(EventClock)
-	m6["p1"] = 20
-	m6["p2"] = 21
+		m6 := make(EventClock)
+		m6["p1"] = 10
+		m6["p2"] = 11
 
-	assert.True(t, compareClock(m5, m6))
-	assert.False(t, compareClock(m6, m5))
+		assert.True(t, compareClock(m5, m6))
+		assert.False(t, compareClock(m6, m5))
+	})
+
 }
 
 func TestSendEventEvent(t *testing.T) {
@@ -60,14 +65,28 @@ func TestClocksMatch(t *testing.T) {
 
 	p1 := Init("p1")
 	p2 := Init("p2")
-
-	// p1 sends vClock to p2
-	p1.SendEvent("event", []string{"p2"})
-	// p2 receives vClock from p1
-	p2.ReceiveEvent("event", p1.Get("event"))
-
+	for i := 0; i < 100; i++ {
+		// p1 sends vClock to p2
+		p1.SendEvent("event", []string{"p2"})
+		// p2 receives vClock from p1
+		p2.ReceiveEvent("event", p1.Get("event"))
+	}
 	// both clocks match
 	assert.Equal(t, p1.Get("event"), p2.Get("event"))
 	p1.Clear("event")
 	p2.Clear("event")
+}
+
+func TestCompareClocks(t *testing.T) {
+	var ids = []string{"event1", "event2", "event3", "event4"}
+	for i := 0; i < 100; i++ {
+		m1 := mockClock(i, ids...)
+		m2 := mockClock(i+1, ids...)
+		m3 := mockClock(i+1, ids[1:]...)
+		m4 := mockClock(i+2, ids[2:]...)
+		assert.True(t, compareClock(m1, m2))
+		assert.True(t, compareClock(m2, m3))
+		assert.True(t, compareClock(m3, m4))
+		assert.False(t, compareClock(m4, m1))
+	}
 }

@@ -91,7 +91,7 @@ func (v *vClock) ReceiveEvent(eventIdOrHash string, v1 EventClock) {
 	}
 }
 
-// event updates the individual clock entry for this entry
+// Event updates the individual clock entry for this entry
 func (v *vClock) event(eventIdOrHash, address string) {
 	if v.vectorClock[eventIdOrHash] == nil {
 		v.initClock(eventIdOrHash, address)

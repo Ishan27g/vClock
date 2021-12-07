@@ -8,12 +8,11 @@ import (
 	"testing"
 	"time"
 
-	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 )
 
 /*
-- Each peer node (follower) maintains a very partial view of the entire network. An event received by a peer can be sent to a peer in another zone, which means that an event is recorded at the other zone's leader.
+- Each peer node (follower) maintains a very partial view of the entire network. An Event received by a peer can be sent to a peer in another zone, which means that an Event is recorded at the other zone's leader.
 - A round lasts (T) time duration and events are a part of a round. This means, at the end of a round, each zone leader has a partial order of some events across all zones
 
 Every Round (R) :
@@ -27,12 +26,12 @@ Every Round (R) :
                     -> Merge each response order with expected order.
                 - receive global order for this round number from all leaders, send back current value of expected order.
                     -> Merge each request order with expected order
-                A merge will only update the expected order if the response/request order includes a new event. This is merged in order.
+                A merge will only update the expected order if the response/request order includes a new Event. This is merged in order.
         After sending to & receiving from all leaders
                -> expected order is the final order of all global events for this rounds
                -> send snapshot to raft-followers
-                        - If follower has eventId, persist the event data to a file
-                        - If follower has not seen eventId, lookup eventMetadata and request it from a peer that has this data, then persist the event data to a file.
+                        - If follower has eventId, persist the Event data to a file
+                        - If follower has not seen eventId, lookup eventMetadata and request it from a peer that has this data, then persist the Event data to a file.
                         (similar to IPFS)
 */
 const tClientsPerZone = 5
@@ -126,11 +125,11 @@ func (mn *mockNetwork) getPeerClock(address string) VectorClock {
 
 /// User sends gossip -> 1 peer in zone X receives it. Sends to leader of X and N peers in M zones, and
 /*
-- Random peer in this zone receives a user event,
+- Random peer in this zone receives a user Event,
 - Peer selects 3 random peers across all zones
 - Peer updates clock for this sendEvent with these peers
 - Peer sends a `new-event` to zone-leader
-- Returns clock of the new event received by a zone leader for this event
+- Returns clock of the new Event received by a zone leader for this Event
 */
 func (mn *mockNetwork) mockUserEventAtZone(zone int, eventId string) EventClock {
 	peerAddr := ""
@@ -196,15 +195,15 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 
 	// receive the events at leader1
 	for i := range leader1ReciveEvent {
-		zoneLeaders[1].events.MergeEvent(cloudEvent(i.eventId, i.clock))
+		zoneLeaders[1].events.MergeEvent(Event{EventId: i.eventId, EventClock: i.clock})
 	}
 	// receive the events at leader2
 	for i := range leader2ReciveEvent {
-		zoneLeaders[2].events.MergeEvent(cloudEvent(i.eventId, i.clock))
+		zoneLeaders[2].events.MergeEvent(Event{EventId: i.eventId, EventClock: i.clock})
 	}
 	// receive the events at leader2
 	for i := range leader3ReciveEvent {
-		zoneLeaders[3].events.MergeEvent(cloudEvent(i.eventId, i.clock))
+		zoneLeaders[3].events.MergeEvent(Event{EventId: i.eventId, EventClock: i.clock})
 	}
 
 	// leaders exchange their snapshots
@@ -222,8 +221,8 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 		// leader 1 sends to all leaders, other leaders merge with this
 		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
-		leader2Events.MergeEvents(leader1expectedOrder)
-		leader3Events.MergeEvents(leader1expectedOrder)
+		leader2Events.MergeEvents(leader1expectedOrder...)
+		leader3Events.MergeEvents(leader1expectedOrder...)
 	}()
 	wg.Add(1)
 	// leader 1 receives from all leaders, merges with this
@@ -231,8 +230,8 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 		defer wg.Done()
 		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
-		leader1Events.MergeEvents(leader2Events.GetCurrentEvents())
-		leader1Events.MergeEvents(leader3Events.GetCurrentEvents())
+		leader1Events.MergeEvents(leader2Events.GetCurrentEvents()...)
+		leader1Events.MergeEvents(leader3Events.GetCurrentEvents()...)
 	}()
 	wg.Add(1)
 	// leader 2 sends to all leaders, other leaders merge with this
@@ -240,8 +239,8 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 		defer wg.Done()
 		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
-		leader1Events.MergeEvents(leader2expectedOrder)
-		leader3Events.MergeEvents(leader2expectedOrder)
+		leader1Events.MergeEvents(leader2expectedOrder...)
+		leader3Events.MergeEvents(leader2expectedOrder...)
 	}()
 	wg.Add(1)
 	// leader 2 receives from all leaders, merges with this
@@ -249,8 +248,8 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 		defer wg.Done()
 		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
-		leader2Events.MergeEvents(leader1Events.GetCurrentEvents())
-		leader2Events.MergeEvents(leader3Events.GetCurrentEvents())
+		leader2Events.MergeEvents(leader1Events.GetCurrentEvents()...)
+		leader2Events.MergeEvents(leader3Events.GetCurrentEvents()...)
 	}()
 	wg.Add(1)
 	// leader 3 sends to all leaders, other leaders merge with this
@@ -258,8 +257,8 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 		defer wg.Done()
 		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
-		leader1Events.MergeEvents(leader3expectedOrder)
-		leader2Events.MergeEvents(leader3expectedOrder)
+		leader1Events.MergeEvents(leader3expectedOrder...)
+		leader2Events.MergeEvents(leader3expectedOrder...)
 	}()
 	wg.Add(1)
 	// leader 3 receives from all leaders, merges with this
@@ -267,8 +266,8 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 		defer wg.Done()
 		d := rand.Intn(5000)
 		<-time.After(time.Duration(d))
-		leader3Events.MergeEvents(leader2Events.GetCurrentEvents())
-		leader3Events.MergeEvents(leader3Events.GetCurrentEvents())
+		leader3Events.MergeEvents(leader2Events.GetCurrentEvents()...)
+		leader3Events.MergeEvents(leader3Events.GetCurrentEvents()...)
 	}()
 	// MergeClocks(leader1expected)
 	wg.Wait()
@@ -276,14 +275,14 @@ func TestSomeEventsAtSomeLeaders(t *testing.T) {
 	assert.Equal(t, leader1Events.GetEventsOrder(), leader2Events.GetEventsOrder())
 	assert.Equal(t, leader2Events.GetEventsOrder(), leader3Events.GetEventsOrder())
 
-	b := leader1Events.GetCurrentEvents()
-	for _, b2 := range b {
-		marshalJSON, err := b2.MarshalJSON()
-		assert.NoError(t, err)
-		var c = new(cloudevents.Event)
-		err = c.UnmarshalJSON(marshalJSON)
-		assert.NoError(t, err)
-	}
+	//b := leader1Events.GetCurrentEvents()
+	//for _, b2 := range b {
+	//	marshalJSON, err := b2.MarshalJSON()
+	//	assert.NoError(t, err)
+	//	var c = new(cloudevents.Event)
+	//	err = c.UnmarshalJSON(marshalJSON)
+	//	assert.NoError(t, err)
+	//}
 
 	//	})
 	// fmt.Println(leader1Events.GetEventsOrder())
@@ -313,7 +312,7 @@ func setupRegistry() (mockNetwork, map[int]leader, chan evt, chan evt, chan evt,
 	return mn, zoneLeaders, leader1ReciveEvent, leader2ReciveEvent, leader3ReciveEvent, eventIds
 }
 
-// randomEvent creates a new event at this zone after a random timeout
+// randomEvent creates a new Event at this zone after a random timeout
 func (mn *mockNetwork) randomEvent(zoneId int, eventId string) evt {
 	//rand.Seed(time.Now().Unix())
 	return evt{
@@ -323,7 +322,7 @@ func (mn *mockNetwork) randomEvent(zoneId int, eventId string) evt {
 }
 
 // mockGossip mocks a `new-event` at the corresponding zone after a random timeout
-// it returns the event to eventChan.
+// it returns the Event to eventChan.
 func (mn *mockNetwork) mockGossip(eventIds []string, eventChan chan evt) {
 	wg := sync.WaitGroup{}
 	for i, id := range eventIds {

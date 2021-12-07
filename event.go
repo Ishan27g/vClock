@@ -13,26 +13,33 @@ import (
 type Events interface {
 	// MergeEvents merges the current event clocks with received event clocks.
 	// New events are added to current list
-	MergeEvents(cs []cloudevents.Event)
+	MergeEvents(es ...Event)
 	// MergeEvent takes an eventId & clock and merges with existing clock
 	// New events are added to current list
-	MergeEvent(c cloudevents.Event)
+	MergeEvent(e Event)
 	// GetCurrentEvents returns the events currently saved. Not in order
-	GetCurrentEvents() []cloudevents.Event
+	GetCurrentEvents() []Event
 	// GetEventsOrder returns the eventIds ordered according to vector clock for the events
 	GetEventsOrder() (eventIdsOrHashes []string)
 }
 
-func convertToLocal(c cloudevents.Event) event {
-	var e event
+func cloudEvent(id string, data EventClock) cloudevents.Event {
+	return convertToCloud(Event{
+		EventId:    id,
+		EventClock: data,
+	})
+}
+
+func convertToLocal(c cloudevents.Event) Event {
+	var e Event
 	_ = json.Unmarshal(c.DataEncoded, &e.EventClock)
 	e.EventId = c.ID()
 	return e
 }
-func convertToCloud(e event) cloudevents.Event {
+func convertToCloud(e Event) cloudevents.Event {
 	c := cloudevents.NewEvent()
 	c.SetID(e.EventId)
-	c.SetSource("okok")
+	c.SetSource("oko	k")
 	err := c.SetData(cloudevents.ApplicationJSON, e.EventClock)
 	if err != nil {
 		return cloudevents.Event{}
@@ -40,8 +47,8 @@ func convertToCloud(e event) cloudevents.Event {
 	return c
 }
 
-// value for eventClocks tree
-type event struct {
+// Event contains value for eventClocks tree
+type Event struct {
 	EventId    string     `json:"event_id"`
 	EventClock EventClock `json:"event_clock"`
 }
@@ -51,20 +58,20 @@ type events struct {
 	eventClocks *avl.Tree // key = eventIdOrHash, value = EventClock
 }
 
-func (e *events) GetCurrentEvents() []cloudevents.Event {
-	var events []cloudevents.Event
+func (e *events) GetCurrentEvents() []Event {
+	var events []Event
 	for it := e.eventClocks.Iterator(); it.Next(); {
-		clock := it.Value().(event)
-		events = append(events, convertToCloud(event{
+		clock := it.Value().(Event)
+		events = append(events, Event{
 			EventId:    it.Key().(string),
 			EventClock: clock.EventClock,
-		}))
+		})
 	}
 	return events
 }
 
-func (e *events) MergeEvents(cs []cloudevents.Event) {
-	for _, c := range cs {
+func (e *events) MergeEvents(ev ...Event) {
+	for _, c := range ev {
 		e.MergeEvent(c)
 	}
 }
@@ -93,15 +100,14 @@ func MergeClocks(v1 EventClock, v2 EventClock) *EventClock {
 	return &v
 }
 
-func newEvent(eventIdOrHash string, v2 EventClock) event {
-	return event{
+func newEvent(eventIdOrHash string, v2 EventClock) Event {
+	return Event{
 		EventId:    eventIdOrHash,
 		EventClock: v2,
 	}
 }
 
-func (e *events) MergeEvent(c cloudevents.Event) {
-	ev := convertToLocal(c)
+func (e *events) MergeEvent(ev Event) {
 	// check if present with another vectorClock
 	v1, found := e.eventClocks.Get(ev.EventId)
 	if !found {
@@ -110,7 +116,7 @@ func (e *events) MergeEvent(c cloudevents.Event) {
 		return
 	}
 	// get existing EventClock
-	v := v1.(event)
+	v := v1.(Event)
 	// merge v1 and v2
 	v.EventClock = *v.EventClock.mergeWith(ev.EventClock)
 	// update eventClocks
@@ -121,13 +127,13 @@ func (e *events) GetEventsOrder() []string {
 	k := e.eventClocks.Values()
 	a := arraylist.New()
 	for i := 0; i < len(k); i++ {
-		ec := k[i].(event)
+		ec := k[i].(Event)
 		a.Add(ec)
 	}
 	a.Sort(eventComparator)
 	var eventIdsOrHashes []string
 	a.Each(func(_ int, value interface{}) {
-		ec := value.(event)
+		ec := value.(Event)
 		eventIdsOrHashes = append(eventIdsOrHashes, ec.EventId)
 	})
 
@@ -135,8 +141,8 @@ func (e *events) GetEventsOrder() []string {
 }
 
 var eventComparator = func(a, b interface{}) int {
-	v1 := a.(event)
-	v2 := b.(event)
+	v1 := a.(Event)
+	v2 := b.(Event)
 	c1 := compareClock(v1.EventClock, v2.EventClock)
 	c2 := compareClock(v2.EventClock, v1.EventClock)
 	if c1 && c2 { // both are same
