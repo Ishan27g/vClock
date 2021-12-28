@@ -11,14 +11,11 @@ import (
 type VectorClock interface {
 	// Get returns the current vector clock
 	Get(eventIdOrHash string) EventClock
-
 	// SendEvent returns the current vector clock after first updating self clock and then
 	// updating the individual clocks for corresponding addresses
 	SendEvent(eventIdOrHash string, addresses []string) EventClock
-
 	// ReceiveEvent updates the current vector clock using element wise maximum with the passed vector clock
 	ReceiveEvent(eventIdOrHash string, v EventClock)
-
 	Clear(eventIdOrHash string)
 	print()
 }
