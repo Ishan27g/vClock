@@ -1,6 +1,7 @@
 package vClock
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -88,5 +89,14 @@ func TestCompareClocks(t *testing.T) {
 		assert.True(t, compareClock(m2, m3))
 		assert.True(t, compareClock(m3, m4))
 		assert.False(t, compareClock(m4, m1))
+	}
+}
+func TestCompareDuplicateClocks(t *testing.T) {
+	var ids = []string{"event1", "event2", "event3", "event4"}
+	for i := 10; i < 11; i++ {
+		m1 := mockClock(i, ids...)
+		m2 := m1
+		fmt.Println(compareClock(m1, m2))
+		fmt.Println(compareClock(m2, m1))
 	}
 }

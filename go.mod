@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/cloudevents/sdk-go/v2 v2.6.0
 	github.com/emirpasic/gods v1.12.0
+	github.com/iancoleman/orderedmap v0.2.0
 	github.com/stretchr/testify v1.7.0
 )
 

@@ -3,9 +3,10 @@ package vClock
 import (
 	"fmt"
 	"sync"
-
-	"github.com/emirpasic/gods/lists/arraylist"
 )
+
+var AllPeers peerClock
+var once sync.Once
 
 // VectorClock provides interface to implement vector clock
 type VectorClock interface {
@@ -30,15 +31,35 @@ func (v *EventClock) mergeWith(v2 EventClock) *EventClock {
 type vClock struct {
 	lock        sync.Mutex
 	self        string
-	vectorClock map[string]EventClock      // clock per event
-	addressList map[string]*arraylist.List // clock-peers for each event
+	vectorClock map[string]EventClock // clock per event
+}
+type peerClock map[string]*int
+
+func (p peerClock) add(peer string) {
+	if p.get(peer) == -1 {
+		p[peer] = new(int)
+		*p[peer] = 0
+	}
+}
+func (p peerClock) update(peer string) {
+	p.add(peer)
+	p.updateTo(peer, p.get(peer)+1)
+}
+func (p peerClock) get(peer string) int {
+	if p[peer] == nil {
+		return -1
+	}
+	return *p[peer]
 }
 
+func (p peerClock) updateTo(address string, clock int) {
+	*p[address] = clock
+}
 func (v *vClock) Clear(eventIdOrHash string) {
 	v.lock.Lock()
 	v.vectorClock[eventIdOrHash] = make(EventClock)
-	v.addressList[eventIdOrHash].Clear()
 	v.initClock(eventIdOrHash, v.self)
+	// AllPeers = make(peerClock)
 	v.lock.Unlock()
 }
 
@@ -78,24 +99,28 @@ func (v *vClock) ReceiveEvent(eventIdOrHash string, v1 EventClock) {
 	}
 	// merge with received clock
 	for address, newClock := range v1 {
-		if v.addressList[eventIdOrHash].Contains(address) {
+		if address == v.self { // todo revert ???
+			v.vectorClock[eventIdOrHash][address] = newClock
+		}
+		if AllPeers.get(address) != -1 {
 			v.updateClock(eventIdOrHash, address, newClock)
 		} else { // if new address
-			// v.initClock(eventIdOrHash, address)
-			v.addressList[eventIdOrHash].Add(address)
+			AllPeers.add(address)
 			v.updateClock(eventIdOrHash, address, newClock)
 		}
+		AllPeers.updateTo(address, newClock)
 	}
 }
 
 // Event updates the individual clock entry for this entry
 func (v *vClock) event(eventIdOrHash, address string) {
+
+	AllPeers.update(address)
+
 	if v.vectorClock[eventIdOrHash] == nil {
 		v.initClock(eventIdOrHash, address)
-		v.addressList[eventIdOrHash].Add(address)
 	}
-	currentClock := v.vectorClock[eventIdOrHash]
-	v.vectorClock[eventIdOrHash][address] = currentClock[address] + 1
+	v.vectorClock[eventIdOrHash][address] = AllPeers.get(address)
 }
 
 // updateClock updates the individual clock if it is lower than the new clock
@@ -105,20 +130,24 @@ func (v *vClock) updateClock(eventIdOrHash, address string, newClock int) {
 	}
 }
 
-func Init(self string) VectorClock {
-	v := vClock{
-		lock:        sync.Mutex{},
-		vectorClock: make(map[string]EventClock),
-		self:        self,
-		addressList: make(map[string]*arraylist.List),
-	}
-	//v.initClock(v.self)
-	return &v
-}
-
 func (v *vClock) initClock(event, peer string) {
 	v.vectorClock[event] = EventClock{
 		peer: 0,
 	}
-	v.addressList[event] = arraylist.New()
+	if AllPeers.get(peer) != -1 {
+		v.vectorClock[event][peer] = AllPeers.get(peer)
+	}
+
+}
+func Init(self string) VectorClock {
+	once.Do(func() {
+		AllPeers = make(map[string]*int)
+	})
+	v := vClock{
+		lock:        sync.Mutex{},
+		vectorClock: make(map[string]EventClock),
+		self:        self,
+	}
+	//v.initClock(v.self)
+	return &v
 }
