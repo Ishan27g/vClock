@@ -56,7 +56,6 @@ type Event struct {
 // all events
 type events struct {
 	clocks *orderedmap.OrderedMap
-	// eventClocks *avl.Tree // key = eventIdOrHash, value = EventClock
 }
 
 func (e *events) GetCurrentEvents() []Event {
@@ -97,10 +96,8 @@ func merge(v1, v2 EventClock) EventClock {
 // MergeClocks merges the current event clock with the provided event clock.
 // unique entries from both clocks are kept
 func MergeClocks(v1 EventClock, v2 EventClock) *EventClock {
-	//fmt.Println("merging ", v1, " with ", v2)
 	v := merge(v1, v2)
 	v = merge(v2, v)
-	//fmt.Println("merged ", v)
 	return &v
 }
 
@@ -138,7 +135,6 @@ func (e *events) GetEventsOrder() []Event {
 	for _, k := range keys {
 		clock, _ := e.clocks.Get(k)
 		a.Add(clock.(Event))
-		//events = append(events, ec)
 	}
 	a.Sort(eventComparator)
 	var events []Event

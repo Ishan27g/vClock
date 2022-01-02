@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-var AllPeers peerClock
+var processClocks peerClock
 var once sync.Once
 
 // VectorClock provides interface to implement vector clock
@@ -59,7 +59,6 @@ func (v *vClock) Clear(eventIdOrHash string) {
 	v.lock.Lock()
 	v.vectorClock[eventIdOrHash] = make(EventClock)
 	v.initClock(eventIdOrHash, v.self)
-	// AllPeers = make(peerClock)
 	v.lock.Unlock()
 }
 
@@ -80,7 +79,6 @@ func (v *vClock) SendEvent(eventIdOrHash string, address []string) EventClock {
 	defer v.lock.Unlock()
 	// update the individual clock entry for self
 	v.event(eventIdOrHash, v.self)
-
 	for _, a := range address {
 		v.event(eventIdOrHash, a)
 	}
@@ -93,7 +91,6 @@ func (v *vClock) ReceiveEvent(eventIdOrHash string, v1 EventClock) {
 	defer v.lock.Unlock()
 	// update local clock
 	v.event(eventIdOrHash, v.self)
-
 	if v.vectorClock[eventIdOrHash] == nil {
 		v.vectorClock[eventIdOrHash] = make(EventClock)
 	}
@@ -102,25 +99,23 @@ func (v *vClock) ReceiveEvent(eventIdOrHash string, v1 EventClock) {
 		if address == v.self { // todo revert ???
 			v.vectorClock[eventIdOrHash][address] = newClock
 		}
-		if AllPeers.get(address) != -1 {
+		if processClocks.get(address) != -1 {
 			v.updateClock(eventIdOrHash, address, newClock)
 		} else { // if new address
-			AllPeers.add(address)
+			processClocks.add(address)
 			v.updateClock(eventIdOrHash, address, newClock)
 		}
-		AllPeers.updateTo(address, newClock)
+		processClocks.updateTo(address, newClock)
 	}
 }
 
 // Event updates the individual clock entry for this entry
 func (v *vClock) event(eventIdOrHash, address string) {
-
-	AllPeers.update(address)
-
+	processClocks.update(address)
 	if v.vectorClock[eventIdOrHash] == nil {
 		v.initClock(eventIdOrHash, address)
 	}
-	v.vectorClock[eventIdOrHash][address] = AllPeers.get(address)
+	v.vectorClock[eventIdOrHash][address] = processClocks.get(address)
 }
 
 // updateClock updates the individual clock if it is lower than the new clock
@@ -134,20 +129,19 @@ func (v *vClock) initClock(event, peer string) {
 	v.vectorClock[event] = EventClock{
 		peer: 0,
 	}
-	if AllPeers.get(peer) != -1 {
-		v.vectorClock[event][peer] = AllPeers.get(peer)
+	if processClocks.get(peer) != -1 {
+		v.vectorClock[event][peer] = processClocks.get(peer)
 	}
 
 }
 func Init(self string) VectorClock {
 	once.Do(func() {
-		AllPeers = make(map[string]*int)
+		processClocks = make(map[string]*int)
 	})
 	v := vClock{
 		lock:        sync.Mutex{},
 		vectorClock: make(map[string]EventClock),
 		self:        self,
 	}
-	//v.initClock(v.self)
 	return &v
 }
