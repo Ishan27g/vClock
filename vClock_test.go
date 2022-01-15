@@ -58,6 +58,7 @@ func TestCompareMisc(t *testing.T) {
 func TestSendEventEvent(t *testing.T) {
 	p1 := Init("p1")
 	p1.SendEvent("event", []string{"p2"})
+	assert.Equal(t, 1, p1.Get("event")["p1"])
 	assert.Equal(t, 1, p1.Get("event")["p2"])
 	p1.Clear("event")
 }
@@ -92,7 +93,7 @@ func TestCompareClocks(t *testing.T) {
 }
 func TestCompareDuplicateClocks(t *testing.T) {
 	var ids = []string{"event1", "event2", "event3", "event4"}
-	for i := 10; i < 11; i++ {
+	for i := 1; i < 11; i++ {
 		m1 := mockClock(i, ids...)
 		m2 := m1
 		assert.True(t, compareClock(m1, m2))
