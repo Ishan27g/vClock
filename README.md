@@ -1,3 +1,6 @@
+
+### Vector-clock based event ordering
+
 ```go
 package main
 
@@ -16,7 +19,6 @@ type VectorClock interface {
 	print()
 }
 // Events : provides interface for a process with lease/leader-role
-// receives `new-events` from followers with eventId and followers vector clock
 type Events interface {
 	// MergeEvents merges the current event clocks with received event clocks, new events are added to current list
 	MergeEvents(es ...vClock.Event)
