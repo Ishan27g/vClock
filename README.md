@@ -10,12 +10,12 @@ import "github.com/Ishan27gOrg/vClock"
 type VectorClock interface {
 	// SendEvent returns the current vector clock after first updating self clock and then
 	// updating the individual clocks for corresponding addresses
-	SendEvent(eventIdOrHash string, addresses []string) vClock.EventClock
+	SendEvent(id string, addresses []string) vClock.EventClock
 	// Get returns the current vector clock
-	Get(eventIdOrHash string) vClock.EventClock
+	Get(id string) vClock.EventClock
 	// ReceiveEvent updates the current vector clock using element wise maximum with the passed vector clock
-	ReceiveEvent(eventIdOrHash string, v vClock.EventClock)
-	Clear(eventIdOrHash string)
+	ReceiveEvent(id string, v vClock.EventClock)
+	Clear(id string)
 	print()
 }
 // Events : provides interface to merge and order events based on vector clocks
@@ -27,7 +27,7 @@ type Events interface {
 	// GetCurrentEvents returns the events currently saved. Not in order
 	GetCurrentEvents() []vClock.Event
 	// GetEventsOrder returns the eventIds ordered according to vector clock for the events
-	GetEventsOrder() (eventIdsOrHashes []string)
+	GetEventsOrder() (ids []string)
 }
 
 ```
