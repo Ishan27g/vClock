@@ -18,7 +18,7 @@ type VectorClock interface {
 	Clear(eventIdOrHash string)
 	print()
 }
-// Events : provides interface for a process with lease/leader-role
+// Events : provides interface to merge and order events based on vector clocks
 type Events interface {
 	// MergeEvents merges the current event clocks with received event clocks, new events are added to current list
 	MergeEvents(es ...vClock.Event)
