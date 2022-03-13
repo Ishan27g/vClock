@@ -1,4 +1,4 @@
-module github.com/Ishan27gOrg/vClock
+module github.com/Ishan27g/vClock
 
 go 1.17
 
